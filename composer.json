@@ -1,0 +1,11 @@
+{
+    "name": "rick5016/api_rest",
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "require": {
+        "erusev/parsedown": "^1.7"
+    }
+}
