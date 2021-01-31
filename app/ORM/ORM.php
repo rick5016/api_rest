@@ -27,7 +27,7 @@ class ORM extends Utils
         return new $class($datas);
     }
 
-    public function findAll(array $where = array(), $select = null, $order = null, $distinct = false, $page = false)
+    public function findAll(array $where = array(), $select = null, $order = null, $distinct = false, $page = false, $nb_page = '5')
     {
         $results = array();
         if ($page) {
@@ -45,9 +45,9 @@ class ORM extends Utils
             $nb_results = $this->getQuery($where, array('count(' . $search_nb_result . ') as nb'), $order, $distinct)->load()->fetch();
 
             $results['nb_result'] = $nb_results['nb'];
-            $results['nb_page'] = ceil($nb_results['nb'] / 5);
+            $results['nb_page'] = ceil($nb_results['nb'] / $nb_page);
         }
-        $result = $this->getQuery($where, $select, $order, $distinct, $page)->load()->fetchAll();
+        $result = $this->getQuery($where, $select, $order, $distinct, $page, $nb_page)->load()->fetchAll();
         if (!empty($result)) {
             foreach ($result as $key => $data) {
                 $this->fetch(array('connectedUser' => $this->connectedUser) + $data);
@@ -190,7 +190,7 @@ class ORM extends Utils
         return $results;
     }
 
-    protected function getQuery($where = array(), $select = null, $order = null, $distinct = false, $page = false)
+    protected function getQuery($where = array(), $select = null, $order = null, $distinct = false, $page = false, $nb_page = '5')
     {
         $where = (!empty($where)) ? $where : array();
         if (empty($where) && !empty($_POST['where'])) {
@@ -200,7 +200,7 @@ class ORM extends Utils
 
         $order = (!empty($order)) ? $order : (!empty($_POST['order']) ? $_POST['order'] : null);
 
-        return new Query($this, $where, $select, array(), $order, $distinct, $page);
+        return new Query($this, $where, $select, array(), $order, $distinct, $page, $nb_page);
     }
 
     public function toArray()

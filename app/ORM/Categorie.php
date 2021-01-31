@@ -61,40 +61,192 @@ class Categorie extends ORM
         $this->created = $created;
     }
 
-    public function findAll(array $where = array(), $select = null, $order = null, $distinct = false, $page = false)
+    public function findAll(array $where = array(), $select = null, $order = null, $distinct = false, $page = false, $nb_page = '5')
     {
         $results['list'] = array();
 
-        // On récupère la page courante
+        // Si on vient de l'accueil (pas utilisé)
+        $accueil = false;
+        if (!empty($_POST['accueil']) && $_POST['accueil'] === '1') {
+            $accueil = true;
+        }
+        unset($_POST['accueil']);
+
+        // Nombre d'articles par page
+        $nb_page = '10';
+        if (!empty($_POST['nb_page']) && $_POST['nb_page'] <= 50) {
+            $nb_page = $_POST['nb_page'];
+        }
+        unset($_POST['nb_page']);
+
+        // Page courante
         $page = '1';
         if (!empty($_POST['page'])) {
             $page = $_POST['page'];
         }
         unset($_POST['page']);
+        
+        $clauses = array();
 
-        // On récupère la recherche par tags/catégories
+        // Type d'article
+        if (!empty($_POST['where']['type']) && in_array($_POST['where']['type'], array('article', 'news', 'tutos'))) {
+            $clauses['type'] = $_POST['where']['type'];
+        }
+        unset($_POST['where']['type']);
+
+        // Recherche par tags/catégories
         $search_categorie = '';
+        $search_categories = array();
+        $searchQuery = '';
         if (!empty($_POST['where']['categories'])) {
             $search_categorie = $_POST['where']['categories'];
+            $searchCategories = array();
+            foreach (explode('|', $search_categorie) as $param) {
+                if (!empty($param)) {
+                    $categorieTab = explode(':', $param);
+                    $searchCategories[] = $categorieTab[0];
+                    if (!empty($categorieTab[1])) {
+                        $search_categories[] = $categorieTab[0];
+                        $searchQuery .= "(t3.categorie ='" . $categorieTab[0] . "' AND t4.tag ='" . $categorieTab[1] . "' ) OR ";
+                    }
+                }
+            }
+            if (!empty($searchQuery)) {
+                $clauses[] = "(select count(*) as nb
+                from blog_pagetag t2
+                inner join blog_categorie t3 on t2.categorie = t3.id 
+                inner join blog_tag t4 on t2.tag = t4.id 
+                where (" . substr($searchQuery, 0, -4) . ")
+                and blog_page.id = t2.article) > " . (count($search_categories) - 1);
+            }
         }
         unset($_POST['where']['categories']);
 
-        // On récupère la recherche par mots
+        // Recherche par mots
         if (!empty($_POST['where']['search'])) {
             $results['search'] = htmlentities($_POST['where']['search']);
+            $clauses[] = "content like '%" . $results['search'] . "%'";
         }
         unset($_POST['where']['search']);
 
-        // On récupère la recherche par mots (affine)
+        // Recherche affinée
         if (!empty($_POST['where']['affine'])) {
             $results['affine'] = htmlentities($_POST['where']['affine']);
+            $clauses[] = "content like '%" . $results['affine'] . "%'";
         }
         unset($_POST['where']['affine']);
+
+        // On récuoère tous les articles sans pagination
+        $query_relations = new Query(ORM::factory('page'), $clauses, array('blog_page.id', 'title', 'blog_page.slug', 'content', 'vignette', 'blog_page.created', 'blog_page.updated', 'blog_page.user'), array(), 'created desc', true);
+        $query_relations->addLeftjoin('pagetag', 'article = blog_page.id');
+        $query_relations->addLeftjoin('categorie', 'blog_pagetag.categorie = blog_categorie.id');
+        $query_relations->addLeftjoin('tag', 'blog_pagetag.tag = blog_tag.id');
+        $articles = ORM::factory('page')->fetchAll($query_relations->load()->fetchAll());
+
+        $results['list']['categories']['list']    = array();
+        $results['list']['articles']['list']      = array();
+        $results['list']['articles']['nb_result'] = count($articles);
+        $results['list']['articles']['nb_page']   = ceil($results['list']['articles']['nb_result'] / $nb_page);
+
+        // Récupération et compte des catégories et des tags
+        $categories = array();
+        foreach ($articles as $article) {
+            $relations = ORM::factory('pagetag')->findAll(array('article' => $article->getId()), array('categorie', 'tag'), null, true);
+            if (!empty($relations['list'])) {
+                foreach ($relations['list'] as $relation) {
+                    // Récupération de la catégorie
+                    $categorie = $relation->getCategorie();
+                    if (array_key_exists($categorie->getSlug(), $results['list']['categories']['list'])) {
+                        $categorie = $results['list']['categories']['list'][$categorie->getSlug()];
+                    }
+
+                    //Récupération du tag
+                    $tag = $relation->getTag();
+                    $exist = false;
+                    if (!empty($categorie->tags['list'])) {
+                        foreach ($categorie->tags['list'] as $tag_categorie) {
+                            if ($tag->getSlug() == $tag_categorie->getSlug()) {
+                                $exist = true;
+                                $tag_categorie->count++;
+                            }
+                        }
+                    }
+                    if (!$exist) {
+                        $tag->count = 1;
+                        $categorie->tags['list'][] = $tag;
+                    }
+
+                    $results['list']['categories']['list'][$categorie->getSlug()] = $categorie;
+                }
+            }
+        }
+
+        // Si les catégories selectionnées n'existe pas dans le jeu de résultat on les récupère avec leur tags
+        if (!empty($search_categories)) {
+            foreach ($search_categories as $search_categorie) {
+                $exist = false;
+                foreach ($results['list']['categories']['list'] as $categorie) {
+                    if ($search_categorie == $categorie->getSlug()) {
+                        $exist = true;
+                    }
+                }
+                if (!$exist) {
+                    $cat = ORM::factory('categorie')->find(array('categorie' => $search_categorie), array('id'));
+                    $relations = ORM::factory('pagetag')->findAll(array('categorie' => $cat->getId()), array('categorie', 'tag'), null, true);
+                    if (!empty($relations['list'])) {
+                        foreach ($relations['list'] as $relation) {
+                            // Récupération de la catégorie
+                            $categorie = $relation->getCategorie();
+                            if (array_key_exists($categorie->getSlug(), $results['list']['categories']['list'])) {
+                                $categorie = $results['list']['categories']['list'][$categorie->getSlug()];
+                            }
         
+                            //Récupération du tag
+                            $tag = $relation->getTag();
+                            $exist = false;
+                            if (!empty($categorie->tags['list'])) {
+                                foreach ($categorie->tags['list'] as $tag_categorie) {
+                                    if ($tag->getSlug() == $tag_categorie->getSlug()) {
+                                        $exist = true;
+                                    }
+                                }
+                            }
+                            if (!$exist) {
+                                $tag->count = 0;
+                                $categorie->tags['list'][] = $tag;
+                            }
+        
+                            $results['list']['categories']['list'][$categorie->getSlug()] = $categorie;
+                        }
+                    }
+                }
+            }
+        }
+
+
+        // Tri
+        foreach ($results['list']['categories']['list'] as $categorie) {
+            $tags = $categorie->tags;
+            if (!empty($tags['list'])) {
+                usort($categorie->tags['list'], array($this, "cmp"));
+            }
+        }
+
+        // Résultat final
+        $query_relations = new Query(ORM::factory('page'), $clauses, array('blog_page.id', 'title', 'blog_page.slug', 'content', 'vignette', 'blog_page.created', 'blog_page.updated', 'blog_page.user'), array(), 'created desc', true, $page, $nb_page);
+        $query_relations->addLeftjoin('pagetag', 'article = blog_page.id');
+        $query_relations->addLeftjoin('categorie', 'blog_pagetag.categorie = blog_categorie.id');
+        $query_relations->addLeftjoin('tag', 'blog_pagetag.tag = blog_tag.id');
+        $results['list']['articles']['list'] = ORM::factory('page')->fetchAll($query_relations->load()->fetchAll());
+
+
+
+
+
         // Si aucune recherche n'est effectuées alors on récupère tous les articles
-        $searchTag = array();
+        /*$searchTag = array();
         if (empty($search_categorie) && empty($results['search']) && empty($results['affine'])) {
-            $results['list']['articles'] = ORM::factory('page', array('connectedUser' => $this->connectedUser))->findAll(array('type' => 'article'), array(), 'created desc', false, $page);;
+            $results['list']['articles'] = ORM::factory('page', array('connectedUser' => $this->connectedUser))->findAll($where_type, array(), 'created desc', false, $page, $nb_page);
         } else {
             // Extraction des catégories/tags recherchés
             $searchCategories = array();
@@ -156,20 +308,20 @@ class Categorie extends ORM
         }
 
         // Requête permatant de récupérer le jeu de résultat
-        $query_relations = new Query(ORM::factory('page'), $clauses + array('type' => 'article'), array('title', 'slug', 'content', 'vignette', 'created', 'updated', 'blog_page.user'), array(), 'created desc', true, $page);
+        $query_relations = new Query(ORM::factory('page'), $clauses + $where_type, array('title', 'slug', 'content', 'vignette', 'created', 'updated', 'blog_page.user'), array(), 'created desc', true, $page, $nb_page);
         if (!empty($clauses)) {
             $query_relations->addInnerjoin('pagetag', 'article = blog_page.id');
         }
         $results['list']['articles']['list'] = ORM::factory('page')->fetchAll($query_relations->load()->fetchAll());
 
         // Requête permatant de récupérer les informations pour la pagination
-        $query_nb_results = new Query(ORM::factory('page'), $clauses + array('type' => 'article'), array('count(distinct blog_page.id) as nb'));
+        $query_nb_results = new Query(ORM::factory('page'), $clauses + $where_type, array('count(distinct blog_page.id) as nb'));
         if (!empty($clauses)) {
             $query_nb_results->addInnerjoin('pagetag', 'article = blog_page.id');
         }
         $nb_results = $query_nb_results->load()->fetch();
         $results['list']['articles']['nb_result'] = $nb_results['nb'];
-        $results['list']['articles']['nb_page'] = ceil($nb_results['nb'] / 5);
+        $results['list']['articles']['nb_page'] = ceil($nb_results['nb'] / $nb_page);*/
 
         return $results;
     }

@@ -137,7 +137,7 @@ class Pagetag extends ORM
         return $result;
     }
 
-    public function findAll(array $where = array(), $select = null, $order = null, $distinct = false, $page = false)
+    public function findAll(array $where = array(), $select = null, $order = null, $distinct = false, $page = false, $nb_page = '5')
     {
         // Récupération des id si on passe les slugs en paramètre
         /*$categorie = (!empty($where['categorie'])) ? $where['categorie'] : (!empty($_POST['where']['categorie']) ? $_POST['where']['categorie'] : '');
@@ -163,7 +163,7 @@ class Pagetag extends ORM
             }
         }*/
 
-        $results = parent::findAll($where, $select, $order, $distinct, $page);
+        $results = parent::findAll($where, $select, $order, $distinct, $page, $nb_page);
         /*if ($result) {
             $result = $this->addUser($result);
         }

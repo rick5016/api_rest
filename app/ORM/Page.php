@@ -18,6 +18,7 @@ class Page extends ORM
     private $publied;
     private $user;
     public $own;
+    public $similaires = array('list' => array());
 
     public function getPrimaryKey()
     {
@@ -157,14 +158,6 @@ class Page extends ORM
     {
         $result = parent::find($where, $select, $order);
 
-        /*if (isset($result['content'])) {
-            $parsedown = new \Parsedown();
-            $parsedown->setSafeMode(true);
-            $content_markdown = $parsedown->text($result['content']);
-
-            $result['content_parsdown'] = $result['content'];
-        }*/
-
         if ($result) {
             $this->addUser($result);
         }
@@ -172,21 +165,34 @@ class Page extends ORM
         return $result;
     }
 
-    public function findAll(array $where = array(), $select = null, $order = null, $distinct = false, $page = false)
+    public function findAll(array $where = array(), $select = null, $order = null, $distinct = false, $page = false, $nb_page = '5')
     {
-        $results = parent::findAll($where, $select, $order, $distinct, $page);
+        $results = parent::findAll($where, $select, $order, $distinct, $page, $nb_page);
 
         if (!empty($results['list'])) {
             foreach ($results['list'] as $key => $result) {
-                /*if (isset($result['content'])) {
-                    $parsedown = new \Parsedown();
-                    $parsedown->setSafeMode(true);
-                    $content_markdown = $parsedown->text($result['content']);
-
-                    $result['content_parsdown'] = $result['content'];
-                }*/
+                $clauses = array();
+                $others = array();
+                // On va chercher toutes les relations de catégorie 'thème' de l'article
+                $queryTheme = 'tag in (';
+                $type = ORM::factory('pageTag')->find(array('article' => $this->getId(), 'categorie' => 8), array('tag'));
+                $themes = ORM::factory('pageTag')->findAll(array('article' => $this->getId(), 'categorie' => 14), array('tag', 'categorie'));
+                foreach ($themes['list'] as $theme) {
+                    $queryTheme .= $theme->getTag()->getId() . ', ';
+                }
+                $clauses[] = substr($queryTheme, 0, -2) . ')';
+                $clauses[] = 'article != ' . $this->getId();
+                $relations = ORM::factory('pageTag')->findAll($clauses, array('article'), null, true);
+                if (!empty($relations['list'])) {
+                    foreach ($relations['list'] as $relation) {
+                        if (ORM::factory('pageTag')->find(array('article' => $relation->getArticle()->getId(), 'categorie' => 8, 'tag' => $type->getTag()->getId())) !== false) {
+                            $result->similaires['list'][] = $relation->getArticle();
+                        }
+                    }
+                    shuffle($result->similaires['list']);
+                }
+                
                 $this->addUser($result);
-
             }
         }
 
@@ -244,6 +250,16 @@ class Page extends ORM
     {
         if (empty($this->connectedUser)) {
             throw new \Exception('Vous devez être connecté pour effectuer cette action.');
+        }
+
+        if (empty($_POST['where']['slug']) && empty($where['slug'])) {
+            throw new \Exception('Le slug est obligatoire');
+        }
+
+        $where = (!empty($where)) ? $where : array();
+        if (empty($where) && !empty($_POST['where'])) {
+            $where = $_POST['where'];
+            unset($_POST['where']);
         }
 
         $article = $this->getQuery($where)->load()->fetch();

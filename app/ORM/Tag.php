@@ -11,6 +11,7 @@ class Tag extends ORM
     private $tag;
     private $slug;
     private $created;
+    public $count;
 
     public function getPrimaryKey()
     {

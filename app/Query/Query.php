@@ -15,6 +15,7 @@ class Query
     private $select = array();
     private $from;
     private $innerjoin = array();
+    private $leftjoin = array();
     private $where = array();
     private $values = array();
     private $orderby;
@@ -22,7 +23,7 @@ class Query
     private $offset;
 
 
-    public function __construct(ORM $object, array $where = array(), $select = '*', array $values = array(), $orderby = null, $distinct = false, $page = false)
+    public function __construct(ORM $object, array $where = array(), $select = '*', array $values = array(), $orderby = null, $distinct = false, $page = false, $nb_page = '5')
     {
         $this->connection = BDD::getConnection();
 
@@ -33,8 +34,8 @@ class Query
         $this->select   = $select;
         $this->distinct = $distinct;
         if ($page) {
-            $this->limit    = 5;
-            $this->offset   = ($page - 1) * 5;
+            $this->limit    = $nb_page;
+            $this->offset   = ($page - 1) * $nb_page;
         }
 
         // TODO : les valeurs passées ici doivent prendre le dessus sur les valeurs de l'objet
@@ -43,7 +44,7 @@ class Query
 
     public function load(): \PDOStatement
     {
-        $request = 'select ' . $this->getRequestDistinct() . $this->getRequestSelect() . ' from ' . $this->getRequestFrom() . $this->getRequestInnerjoin() . $this->getRequestWhere() . $this->getRequestOrderby() . $this->getRequestLimit() . $this->getRequestOffset();
+        $request = 'select ' . $this->getRequestDistinct() . $this->getRequestSelect() . ' from ' . $this->getRequestFrom() . $this->getRequestInnerjoin() . $this->getRequestLeftjoin() . $this->getRequestWhere() . $this->getRequestOrderby() . $this->getRequestLimit() . $this->getRequestOffset();
         $stmt = $this->connection->prepare($request);
         $stmt = $this->bindRequestValues($stmt);
 
@@ -158,6 +159,23 @@ class Query
         $query = '';
         foreach ($this->innerjoin as $table => $jointure) {
             $query .= " inner join blog_$table on $jointure";
+        }
+
+        return $query;
+    }
+
+    // LEFTJOIN
+    public function addLeftjoin($table, $jointure) {
+        $this->leftjoin[$table] = $jointure;
+    }
+    public function getLeftjoin() {
+        return $this->leftjoin;
+    }
+    private function getRequestLeftjoin()
+    {
+        $query = '';
+        foreach ($this->leftjoin as $table => $jointure) {
+            $query .= " left join blog_$table on $jointure";
         }
 
         return $query;
