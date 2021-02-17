@@ -87,7 +87,7 @@ class ORM extends Utils
     public function save(array $where = array())
     {
         // Security: spoofing
-        if (method_exists($this, 'setUser')) {
+        if (method_exists($this, 'setUser') && $this->connectedUser) {
             $this->setUser($this->connectedUser->userid);
         }
 
@@ -216,9 +216,15 @@ class ORM extends Utils
             if ($data !== null) {
                 if ($data instanceof ORM) {
                     $result[$value->name] = $data->toArray();
-                } else if (is_array($data) && !empty($data['list'])) {
-                    foreach ($data['list'] as $key => $list) {
-                        $result[$value->name][$key] = $list->toArray();
+                } else if (is_array($data)) {
+                    foreach ($data as $key => $list) {
+                        if (is_array($list) && !empty($key == 'list')) {
+                            foreach ($list as $keyList => $dataList) {
+                                $result[$value->name]['list'][$keyList] = $dataList->toArray();
+                            }
+                        } else {
+                            $result[$value->name][$key] = $list;
+                        }
                     }
                 } else {
                     $result[$value->name] = $data;

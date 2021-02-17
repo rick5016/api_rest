@@ -19,6 +19,7 @@ class Page extends ORM
     private $user;
     public $own;
     public $similaires = array('list' => array());
+    public $commentaires = array('list' => array(), 'nb_result' => 0, 'page' => 1);
 
     public function getPrimaryKey()
     {
@@ -133,16 +134,6 @@ class Page extends ORM
         $this->publied = $publied;
     }
 
-    /*public function setUser($user)
-    {
-        if ($user instanceof \stdClass) {
-            if (!empty($user->userid)) {
-                $user = $user->userid;
-            }
-        }
-        $this->user = $user;
-    }*/
-
     public function setUser($user)
     {
         if ($user instanceof User) {
@@ -167,25 +158,35 @@ class Page extends ORM
 
     public function findAll(array $where = array(), $select = null, $order = null, $distinct = false, $page = false, $nb_page = '5')
     {
+        $page_commentaire = $_POST['where']['page'];
+        unset($_POST['where']['page']);
+
         $results = parent::findAll($where, $select, $order, $distinct, $page, $nb_page);
 
         if (!empty($results['list'])) {
             foreach ($results['list'] as $key => $result) {
+                $result->commentaires = ORM::factory('commentaire')->findAll(array('article' => $this->getId(), 'publied' => '1'), null, 'created desc', false, $page_commentaire, 10);
                 $clauses = array();
                 $others = array();
                 // On va chercher toutes les relations de catégorie 'thème' de l'article
                 $queryTheme = 'tag in (';
-                $type = ORM::factory('pageTag')->find(array('article' => $this->getId(), 'categorie' => 8), array('tag'));
-                $themes = ORM::factory('pageTag')->findAll(array('article' => $this->getId(), 'categorie' => 14), array('tag', 'categorie'));
-                foreach ($themes['list'] as $theme) {
-                    $queryTheme .= $theme->getTag()->getId() . ', ';
+                $type = ORM::factory('pagetag')->find(array('article' => $this->getId(), 'categorie' => 8), array('tag'));
+                $themes = ORM::factory('pagetag')->findAll(array('article' => $this->getId(), 'categorie' => 14), array('tag', 'categorie'));
+                if (!empty($themes['list'])) {
+                    foreach ($themes['list'] as $theme) {
+                        $queryTheme .= $theme->getTag()->getId() . ', ';
+                    }
+                    $clauses[] = substr($queryTheme, 0, -2) . ')';
+                    $clauses[] = 'article != ' . $this->getId();
+                    $relations = ORM::factory('pagetag')->findAll($clauses, array('article'), null, true);
+                } else if (!empty($type)) {
+                    $clauses['tag'] = $type->getTag()->getId();
+                    $clauses[] = 'article != ' . $this->getId();
+                    $relations = ORM::factory('pagetag')->findAll($clauses, array('article'), null, true);
                 }
-                $clauses[] = substr($queryTheme, 0, -2) . ')';
-                $clauses[] = 'article != ' . $this->getId();
-                $relations = ORM::factory('pageTag')->findAll($clauses, array('article'), null, true);
-                if (!empty($relations['list'])) {
+                if (!empty($relations['list']) && !empty($type)) {
                     foreach ($relations['list'] as $relation) {
-                        if (ORM::factory('pageTag')->find(array('article' => $relation->getArticle()->getId(), 'categorie' => 8, 'tag' => $type->getTag()->getId())) !== false) {
+                        if (ORM::factory('pagetag')->find(array('article' => $relation->getArticle()->getId(), 'categorie' => 8, 'tag' => $type->getTag()->getId())) !== false) {
                             $result->similaires['list'][] = $relation->getArticle();
                         }
                     }

@@ -89,7 +89,7 @@ class Categorie extends ORM
         $clauses = array();
 
         // Type d'article
-        if (!empty($_POST['where']['type']) && in_array($_POST['where']['type'], array('article', 'news', 'tutos'))) {
+        if (!empty($_POST['where']['type']) && in_array($_POST['where']['type'], array('article', 'news', 'tuto'))) {
             $clauses['type'] = $_POST['where']['type'];
         }
         unset($_POST['where']['type']);
@@ -107,7 +107,7 @@ class Categorie extends ORM
                     $searchCategories[] = $categorieTab[0];
                     if (!empty($categorieTab[1])) {
                         $search_categories[] = $categorieTab[0];
-                        $searchQuery .= "(t3.categorie ='" . $categorieTab[0] . "' AND t4.tag ='" . $categorieTab[1] . "' ) OR ";
+                        $searchQuery .= "(t3.slug ='" . $categorieTab[0] . "' AND t4.slug ='" . $categorieTab[1] . "' ) OR ";
                     }
                 }
             }
