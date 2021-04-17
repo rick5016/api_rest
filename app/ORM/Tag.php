@@ -2,85 +2,36 @@
 
 namespace App\ORM;
 
-use App\ORM\Page;
 use App\ORM\ORM;
 
 class Tag extends ORM
 {
-    private $id;
-    private $tag;
-    private $slug;
-    private $created;
-    public $count;
+    protected $id;
+    protected $tag;
+    protected $slug;
+    protected $created;
+    protected $count;
 
-    public function getPrimaryKey()
+    public function findAll(array $properties = array(), $cascade = array())
     {
-        return array(
-            array('id', 'AI')
-        );
-    }
+        if (!empty($properties)) {
+            return parent::findAll($properties, $cascade);
+        }
 
-    public function getId()
-    {
-        return $this->id;
-    }
-
-    public function getTag()
-    {
-        return $this->tag;
-    }
-
-    public function getSlug()
-    {
-        return $this->slug;
-    }
-
-    public function getCreated()
-    {
-        return $this->created;
-    }
-
-
-    protected function setId($id)
-    {
-        $this->id = $id;
-    }
-
-    public function setTag($tag)
-    {
-        $this->tag = $tag;
-    }
-
-    public function setSlug($slug)
-    {
-        $this->slug = $slug;
-    }
-
-    public function setCreated($created)
-    {
-        $this->created = $created;
+        //if {isset($_POST['where']['categorie'])}
     }
 
     public function save(array $where = array())
     {
-        if (empty($this->connectedUser)) {
-            throw new \Exception('Vous devez être connecté pour effectuer cette action.');
+        if (empty($this->slug)) {
+            throw new \Exception("Le slug est obligatoire.");
         }
+        $this->slug = $this->string_to_slug($this->slug);
 
-        if (empty($this->getTag())) {
-            throw new \Exception("Le tag est obligatoire.");
+        if (empty($this->tag)) {
+            $this->tag = $this->slug;
         }
-
-        $this->setSlug($this->string_to_slug($this->getTag()));
 
         return parent::save($where);
-    }
-
-    public function delete(array $where = array())
-    {
-        if (empty($this->connectedUser)) {
-            throw new \Exception('Vous devez être connecté pour effectuer cette action.');
-        }
-        return parent::delete($where);
     }
 }

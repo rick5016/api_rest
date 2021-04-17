@@ -7,107 +7,62 @@ use App\ORM\ORM;
 
 class User extends ORM
 {
-    private $id;
-    private $login;
-    private $password;
-    private $type;
-    private $created;
-    private $updated;
-    private $publied;
+    protected $id;
+    protected $login;
+    protected $password;
+    protected $type;
+    protected $created;
+    protected $updated;
+    protected $publied;
+    protected $roles;
+    protected $email;
 
-    public function getPrimaryKey()
+    public function find(array $properties = array(), $cascade = array())
     {
-        return array(
-            array('id', 'AI')
-        );
+        $result = array();
+        // S'il existe une clause where alors on va chercher les infos de ce user
+        if (!empty($properties) || !empty($_POST['where'])) {
+            $result = parent::find($properties, $cascade);
+        }
+
+        // Sinon on va chercher les infos de l'utilisateur connecté
+        if (!empty($this->connectedUser)) {
+            $result = parent::find(array('where' => array('id' => $this->connectedUser->userid)), $cascade);
+        }
+
+        return $result;
     }
-
-    public function getId()
+    public function findArray(array $properties = array(), $cascade = array())
     {
-        return $this->id;
-    }
+        $result = parent::findArray($properties, $cascade);
+        if (empty($properties['where']['login'])) {
+            if (!empty($result['password'])) {
+                $result['password'] = null;
+            }
 
-    public function getLogin()
-    {
-        return $this->login;
-    }
+            if (!empty($result['connectedUser'])) {
+                $result['connectedUser'] = null;
+            }
 
-    public function getPassword()
-    {
-        return $this->password;
-    }
+            if (!empty($result['email'])) {
+                $result['email'] = null;
+            }
+        }
 
-    public function getType()
-    {
-        return $this->type;
-    }
-
-    public function getCreated()
-    {
-        return $this->created;
-    }
-
-    public function getUpdated()
-    {
-        return $this->updated;
-    }
-
-    public function getPublied()
-    {
-        return $this->publied;
-    }
-
-
-    protected function setId($id)
-    {
-        $this->id = $id;
-    }
-
-    public function setTitle($title)
-    {
-        $this->title = $title;
-    }
-
-    public function setLogin($login)
-    {
-        $this->login = $login;
-    }
-
-    public function setPassword($password)
-    {
-        $this->password = $password;
-    }
-
-    public function setType($type)
-    {
-        $this->type = $type;
-    }
-
-    public function setCreated($created)
-    {
-        $this->created = $created;
-    }
-
-    public function setUpdated($updated)
-    {
-        $this->updated = $updated;
-    }
-
-    public function setPublied($publied)
-    {
-        $this->publied = $publied;
+        return $result;
     }
 
     public function login()
     {
-        $user = $this->find(array('login' => $this->login));
+        $user = $this->find(array('where' => array('login' => $this->login)));
         if (isset($user)) {
-            if (password_verify($_POST['password'], $user->getPassword())) {
+            if (password_verify($_POST['password'], $user->password)) {
                 $issuedAt = time();
                 $payload = array(
-                    'userid' => $user->getId(),
+                    'userid' => $user->id,
                     'iat' => $issuedAt,
-                    'exp' => $issuedAt + TOKEN_EXP
+                    'exp' => $issuedAt + TOKEN_EXP,
+                    'roles' => $user->roles,
                 );
                 $jwt = JWT::encode($payload, JWT_KEY, JWT_ALGO);
                 return array('token' => $jwt);
@@ -116,15 +71,6 @@ class User extends ORM
             }
         } else {
             throw new \Exception('Login introuvable');
-        }
-    }
-
-    public function save(array $where = array())
-    {
-        if (!empty($this->user)) {
-            return parent::save($where);
-        } else {
-            throw new \Exception('Aucun utilisateur trouvé');
         }
     }
 
@@ -139,10 +85,19 @@ class User extends ORM
 
     public function inscription()
     {
-        // TODO
-        /*$query = new Query('user', array('login' => $_POST['login'], 'password' => $_POST['password']));
+        $this->login = htmlentities($_POST['login']);
+        $this->password = password_hash($this->password, PASSWORD_DEFAULT);
 
-        if (!$query->save()) {
-            throw new \Exception("L'inscription a échoué");
-        }*/ }
+        if (!empty($_POST['email'])) {
+            $this->email = $_POST['email'];
+        }
+        $user = $this->find(array('where' => array('login' => $this->login)));
+
+        if (!empty($user)) {
+            return array('inscription-error' => 'Ce login existe déjà.');
+        }
+        $this->save();
+
+        return $this->login();
+    }
 }

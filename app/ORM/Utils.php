@@ -23,14 +23,4 @@ class Utils
 
         return $str;
     }
-
-    protected function addUser(ORM $result)
-    {
-        if (!empty($result->getUser())) {
-            $result->own = false;
-            if (!empty($this->connectedUser) && $this->connectedUser->userid == $result->getUser()->getId()) {
-                $result->own = true;
-            }
-        }
-    }
 }

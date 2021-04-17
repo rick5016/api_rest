@@ -22,24 +22,23 @@ class Query
     private $limit;
     private $offset;
 
-
     public function __construct(ORM $object, array $where = array(), $select = '*', array $values = array(), $orderby = null, $distinct = false, $page = false, $nb_page = '5')
     {
         $this->connection = BDD::getConnection();
 
-        $this->object   = $object;
-        $this->from     = $object->getClassName();
-        $this->where    = $where;
-        $this->orderby    = $orderby;
-        $this->select   = $select;
+        $this->object = $object;
+        $this->from = strtolower((new \ReflectionClass($object))->getShortName());
+        $this->where = $where;
+        $this->orderby = $orderby;
+        $this->select = $select;
         $this->distinct = $distinct;
         if ($page) {
-            $this->limit    = $nb_page;
-            $this->offset   = ($page - 1) * $nb_page;
+            $this->limit = $nb_page;
+            $this->offset = ($page - 1) * $nb_page;
         }
 
         // TODO : les valeurs passées ici doivent prendre le dessus sur les valeurs de l'objet
-        $this->values   = $values;
+        $this->values = $values;
     }
 
     public function load(): \PDOStatement
@@ -47,7 +46,6 @@ class Query
         $request = 'select ' . $this->getRequestDistinct() . $this->getRequestSelect() . ' from ' . $this->getRequestFrom() . $this->getRequestInnerjoin() . $this->getRequestLeftjoin() . $this->getRequestWhere() . $this->getRequestOrderby() . $this->getRequestLimit() . $this->getRequestOffset();
         $stmt = $this->connection->prepare($request);
         $stmt = $this->bindRequestValues($stmt);
-
         $stmt->execute();
 
         return $stmt;
@@ -102,14 +100,17 @@ class Query
     }
 
     // DISTINCT
-    public function setDistinct(bool $distinct) {
+    public function setDistinct(bool $distinct)
+    {
         $this->distinct = $distinct;
     }
-    public function getDistinct() {
+    public function getDistinct()
+    {
         return $this->distinct;
     }
 
-    private function getRequestDistinct() {
+    private function getRequestDistinct()
+    {
         if ($this->distinct) {
             return 'distinct ';
         }
@@ -118,10 +119,12 @@ class Query
     }
 
     // SELECT
-    public function setSelect(array $select) {
+    public function setSelect(array $select)
+    {
         $this->select = $select;
     }
-    public function getSelect() {
+    public function getSelect()
+    {
         return $this->select;
     }
     private function getRequestSelect(): string
@@ -137,21 +140,26 @@ class Query
     }
 
     // FROM
-    public function setFrom($from) {
+    public function setFrom($from)
+    {
         $this->from = $from;
     }
-    public function getFrom() {
+    public function getFrom()
+    {
         return $this->from;
     }
-    private function getRequestFrom() {
+    private function getRequestFrom()
+    {
         return 'blog_' . $this->from;
     }
 
     // INNERJOIN
-    public function addInnerjoin($table, $jointure) {
+    public function addInnerjoin($table, $jointure)
+    {
         $this->innerjoin[$table] = $jointure;
     }
-    public function getInnerjoin() {
+    public function getInnerjoin()
+    {
         return $this->innerjoin;
     }
     private function getRequestInnerjoin()
@@ -165,10 +173,12 @@ class Query
     }
 
     // LEFTJOIN
-    public function addLeftjoin($table, $jointure) {
+    public function addLeftjoin($table, $jointure)
+    {
         $this->leftjoin[$table] = $jointure;
     }
-    public function getLeftjoin() {
+    public function getLeftjoin()
+    {
         return $this->leftjoin;
     }
     private function getRequestLeftjoin()
@@ -182,10 +192,12 @@ class Query
     }
 
     // WHERE
-    public function setWhere(array $where) {
+    public function setWhere(array $where)
+    {
         $this->where = $where;
     }
-    public function getWhere() {
+    public function getWhere()
+    {
         return $this->where;
     }
     private function getRequestWhere(): string
@@ -217,10 +229,12 @@ class Query
     }
 
     // VALUES
-    public function setValues(array $values) {
+    public function setValues(array $values)
+    {
         $this->values = $values;
     }
-    public function getValues() {
+    public function getValues()
+    {
         return $this->values;
     }
     private function getRequestInsertValues(): string
@@ -282,7 +296,7 @@ class Query
                 } else {
                     if ($value instanceof ORM) {
                         $value = $value->get('id');
-                    } else if(!is_int($key)) {
+                    } else if (!is_int($key)) {
                         $stmt->bindValue(":where_$key", $value);
                     }
                 }
@@ -293,13 +307,16 @@ class Query
     }
 
     // ORDERBY
-    public function setOrderby($orderby) {
+    public function setOrderby($orderby)
+    {
         $this->orderby = $orderby;
     }
-    public function getOrderby() {
+    public function getOrderby()
+    {
         return $this->orderby;
     }
-    public function getRequestOrderby() {
+    public function getRequestOrderby()
+    {
         $orderby = '';
         if (!empty($this->orderby)) {
             $orderby = ' ORDER BY ' . $this->orderby;
@@ -309,13 +326,16 @@ class Query
     }
 
     // LIMIT
-    public function setLimit($limit) {
+    public function setLimit($limit)
+    {
         $this->limit = $limit;
     }
-    public function getLimit() {
+    public function getLimit()
+    {
         return $this->limit;
     }
-    public function getRequestLimit() {
+    public function getRequestLimit()
+    {
         if (!empty($this->limit) && ($this->offset !== null)) {
             return ' LIMIT ' . $this->limit;
         }
@@ -324,13 +344,16 @@ class Query
     }
 
     // OFFSET
-    public function setOffset($offset) {
+    public function setOffset($offset)
+    {
         $this->offset = $offset;
     }
-    public function getOffset() {
+    public function getOffset()
+    {
         return $this->offset;
     }
-    public function getRequestOffset() {
+    public function getRequestOffset()
+    {
         if (!empty($this->limit) && ($this->offset !== null)) {
             return ' OFFSET ' . $this->offset;
         }

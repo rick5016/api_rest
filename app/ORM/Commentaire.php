@@ -6,50 +6,20 @@ use App\ORM\ORM;
 
 class Commentaire extends ORM
 {
-    private $id;
-    private $content;
-    private $created;
-    private $updated;
-    private $publied;
-    private $article;
-    private $user;
-    public $own;
+    protected $id;
+    protected $content;
+    protected $created;
+    protected $updated;
+    protected $publied;
+    protected $page;
+    protected $user;
+    protected $own;
 
     public function getPrimaryKey()
     {
         return array(
-            array('id', 'AI')
+            array('id', 'AI'),
         );
-    }
-
-    public function getId()
-    {
-        return $this->id;
-    }
-
-    public function getContent()
-    {
-        return $this->content;
-    }
-
-    public function getCreated()
-    {
-        return $this->created;
-    }
-
-    public function getUpdated()
-    {
-        return $this->updated;
-    }
-
-    public function getPublied()
-    {
-        return $this->publied;
-    }
-
-    public function getArticle()
-    {
-        return $this->article;
     }
 
     public function getUser()
@@ -57,102 +27,109 @@ class Commentaire extends ORM
         return $this->user;
     }
 
-
-    protected function setId($id)
+    public function findAll(array $properties = array(), $cascade = array())
     {
-        $this->id = $id;
-    }
-
-    public function setContent($content)
-    {
-        $this->content = $content;
-    }
-
-    public function setCreated($created)
-    {
-        $this->created = $created;
-    }
-
-    public function setUpdated($updated)
-    {
-        $this->updated = $updated;
-    }
-
-    public function setPublied($publied)
-    {
-        $this->publied = $publied;
-    }
-
-    public function setArticle($article)
-    {
-        if ($article instanceof Page) {
-            $this->article = $article;
-        } else if (is_int($article)) {
-            $this->article = ORM::factory('page', array('connectedUser' => $this->connectedUser))->find(array('id' => $article));
-        } else {
-            $this->article = ORM::factory('page', array('connectedUser' => $this->connectedUser))->find(array('slug' => $article));
+        $properties['order'] = 'created desc';
+        if (!in_array('user', $cascade)) {
+            $cascade[] = 'user';
         }
-    }
-
-    public function setUser($user)
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        } else if (is_array($user) && !empty($user['id'])) {
-            $this->user = ORM::factory('user', array('connectedUser' => $this->connectedUser))->find(array('id' => (int) $user['id']));
-        } else {
-            $this->user = ORM::factory('user', array('connectedUser' => $this->connectedUser))->find(array('id' => (int) $user));
+        if (!in_array('page', $cascade)) {
+            $cascade[] = 'page';
         }
-    }
-
-    public function find(array $where = array(), $select = null, $order = null, $distinct = false)
-    {
-        $result = parent::find($where, $select, $order);
-
-        if ($result) {
-            $this->addUser($result);
-        }
-
-        return $result;
-    }
-
-    public function findAll(array $where = array(), $select = null, $order = null, $distinct = false, $page = false, $nb_page = '5')
-    {
-        $results = parent::findAll($where, $select, $order, $distinct, $page, $nb_page);
-
-        if (!empty($results['list'])) {
-            foreach ($results['list'] as $key => $result) {
-                $this->addUser($result);
+        if (empty($properties['page'])) {
+            $properties['page'] = 1;
+            if (!empty($_POST['page'])) {
+                $properties['page'] = $_POST['page'];
             }
         }
-        
-        return $results;
-    }
+        if (empty($properties['nbResultByPage'])) {
+            $properties['nbResultByPage'] = 10;
+            if (!empty($_POST['nbResultByPage'])) {
+                $properties['nbResultByPage'] = $_POST['nbResultByPage'];
+            }
+        }
+        if (!empty($_POST['where']) && !empty($_POST['where']['page'])) {
+            $properties['where'] = array('page' => $_POST['where']['page']);
+        }
 
-    public function save(array $where = array())
+        return parent::findAll($properties, $cascade);
+    }
+    public function save(array $properties = array())
     {
-        $content = $this->getContent();
-        if (empty($content)) {
+        /*$commentairetmp = ORM::factory('commentairetmp', array('connectedUser' => $this->connectedUser))->findAll();
+        if (!empty($commentairetmp['list']) && count($commentairetmp['list']) > 100) {
+            return array('valid' => 'surcharge');
+        }*/
+        if (isset($this->validate) && $this->validate === true) {
+            unset($this->validate);
+            parent::save($properties);
+
+            return array('valid' => true);
+        }
+
+        if (empty($_POST['coords'])) {
+            throw new \Exception("Le commentaire ne peut être sauvegardié/modifié sans validation de captchas.");
+        }
+
+        if (empty($this->content)) {
             throw new \Exception("Le contenu du commentaire est obligatoire.");
         }
 
-        $this->setContent(htmlentities($content));
+        $commentaire = $this;
+        if (!empty($_POST['id'])) {
+            $commentaire = ORM::factory('commentaire', array('connectedUser' => $this->connectedUser))->find(array('where' => array('id' => (int) $_POST['id'])));
+            if (empty($commentaire->id)) {
+                throw new \Exception("Le commentaire est introuvable.");
+            }
+            $properties['where']['id'] = (int) $_POST['id'];
+            $commentaire->updated = date('Y-m-d H:i:s');
+            $commentaire->content = $this->content;
+        } else {
+            if (empty($this->page) || is_int($this->page)) {
+                throw new \Exception("Le slug de l'article est obligatoire.");
+            }
 
-        parent::save($where);
+            $page = ORM::factory('page', array('connectedUser' => $this->connectedUser))->findArray(array('where' => array('slug' => $this->page)));
+            if (empty($page)) {
+                throw new \Exception("L'article est introuvable.");
+            }
+            $this->page = $page['id'];
+        }
 
-        return $this->toArray();
+        // Validation de la captcha
+        /** @var Captcha $captcha */
+        $captcha = ORM::factory('captcha');
+        $validation = $captcha->validation();
+
+        if ($validation === true) {
+            // si l'id existe alors on met a jour le champ updated
+            $commentaire->publied = 0;
+            $commentaire->validate = true;
+            return $commentaire->save($properties);
+        }
+
+        return $validation;
     }
 
-    public function delete(array $where = array())
+    public function delete(array $properties = array())
     {
         if (empty($this->connectedUser)) {
             throw new \Exception('Vous devez être connecté pour effectuer cette action.');
         }
 
-        if (empty($_POST['where']['id']) && empty($where['id'])) {
+        if (empty($this->id) && empty($_POST['where']['id']) && empty($where['id'])) {
             throw new \Exception('L\'id est obligatoire');
         }
-        parent::delete($where);
+
+        if (empty($this->id)) {
+            $commentaire = parent::find($properties);
+            if (empty($commentaire)) {
+                throw new \Exception('Commentaire introuvable.');
+            }
+            $commentaire->delete(array('id' => $this->id));
+        } else {
+            parent::delete($properties);
+        }
 
         return array();
     }
